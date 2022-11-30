@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "pit"
+version = "0.1.0"
+description = ""
+authors = ["Jerom van der Sar <jerom.vandersar@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+argh = "^0.26.2"
+
+[tool.poetry.dev-dependencies]
+
+[tool.poetry.scripts]
+pit = "pit:main"
+pit-db = "pit-db:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
