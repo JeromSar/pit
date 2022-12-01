@@ -1,11 +1,9 @@
-import subprocess
+
 import sys
 import hashlib
 from pathlib import Path
 
-import argh
-
-HASH_LEN = 64 # hex chars, sha256
+HASH_LEN = 40 # hex chars, sha1
 
 def objpath():
     proj_path = Path.cwd().joinpath("test")
@@ -21,111 +19,77 @@ def objpath():
     return objects_path
 
 
-def dig2path(digest, exists):
+def dig2path(partial_digest, exists):
     objects_path = objpath()
     
-    digest = digest.strip().lower()
-    assert len(digest) > 0, "Expect digest to be greater than 0 length"
-    assert len(digest) <= HASH_LEN, "Expect digest to be maximally {} characters long".format(HASH_LEN)
+    partial_digest = partial_digest.strip().lower()
+    assert len(partial_digest) > 0, "Expect digest to be greater than 0 length"
+    assert len(partial_digest) <= HASH_LEN, "Expect digest to be maximally {} characters long".format(HASH_LEN)
 
-    if len(digest) == HASH_LEN:
-        thisobj_path = objects_path.joinpath(digest[0:2], digest[2:])
+    if len(partial_digest) == HASH_LEN:
+        thisobj_path = objects_path.joinpath(partial_digest[0:2], partial_digest[2:])
         assert not thisobj_path.is_dir(), "Expect {} to not be a directory".format()
         if exists: assert thisobj_path.is_file(), "Expect {} to be a file".format(thisobj_path)
         return thisobj_path
-    assert exists, "Incomplete object: {}".format(digest)
-    
+    assert exists, "Incomplete object: {}".format(partial_digest)
     # Break digest into two pieces. 0:2 and 2:0.
     # Be smart about edge cases like 1 and 2 characters where rest_match == ""
-    subfolder_match = digest[0:min(2,len(digest))]
-    rest_match = "" if len(digest) <= 2 else digest[2:]
+    subfolder_match = partial_digest[0:min(2,len(partial_digest))]
+    rest_match = "" if len(partial_digest) <= 2 else partial_digest[2:]
     
     match_object_dirs = list(filter(lambda d: d.name.startswith(subfolder_match), objects_path.iterdir()))
     if len(match_object_dirs) == 0:
-        print("No object found starting with:", digest, "(subfolder)")
+        print("No object found starting with:", partial_digest, "(subfolder)")
         exit(1)
     if len(match_object_dirs) != 1:
-        print("Found multiple objects matching:", digest, "(subfolder)")
+        print("Found multiple objects matching:", partial_digest, "(subfolder)")
         exit(1)
     object_subdir = match_object_dirs[0]
         
     objects = list(filter(lambda d: d.name.startswith(rest_match), object_subdir.iterdir()))
     if len(objects) == 0:
-        print("No object found starting with:", digest, "(in subfolder)")
+        print("No object found starting with:", partial_digest, "(in subfolder)")
         exit(1)
     if len(objects) != 1:
-        print("Found multiple objects matching:", digest, "(in subfolder)")
+        print("Found multiple objects matching:", partial_digest, "(in subfolder)")
         exit(1)
     return objects[0]
 
-def put():
-    bytes_in = b''
-    hash = hashlib.sha256()
-    while True:
-        br = sys.stdin.buffer.read(1024)
-        if br == b'':
-            break
-        bytes_in += br
-        hash.update(br)
-    # print("putting: '{}'".format(bytes_in))
+def put(bytes_in):
+    hash = hashlib.sha1()
+    hash.update(bytes_in)
     digest = hash.hexdigest()
-    # print("digest: '{}'".format(dig))
-
     thisobj_path = dig2path(digest, exists=False)
     
     if not thisobj_path.parent.exists():
         thisobj_path.parent.mkdir()
     assert thisobj_path.parent.is_dir(), "Expect {} to be a directory".format(thisobj_path)
     thisobj_path.write_bytes(bytes_in)
-    print(digest)
-    
-def get():
-    data = sys.stdin.readlines()
-    assert len(data) == 1, "Expect one line of input"
-    digest = data[0].strip()
-    
-    obj_path = dig2path(digest, exists=True)
+    return digest
+
+def get(partial_digest):
+    obj_path = dig2path(partial_digest, exists=True)
     assert obj_path.is_file(), "Expect {} to be a file".format(obj_path)
     
+    bytes_out = b''
     with open(obj_path, "rb") as f:
         while True:
             bytes_read = f.read(1024)
             if bytes_read == b'':
                 break
-            sys.stdout.buffer.write(bytes_read)
+            bytes_out += bytes_read
+    return bytes_out
 
-def delete():
-    data = sys.stdin.readlines()
-    assert len(data) == 1, "Expect one line of input"
-    digest = data[0].strip()
-    
+def delete(partial_digest):
     # Delete
-    obj_path = dig2path(digest, exists=True)
+    obj_path = dig2path(partial_digest, exists=True)
     assert obj_path.is_file(), "Expect {} to be a file".format(obj_path)
     obj_path.unlink()
     
     # Delete parent subdir
     parent_empty = not any(obj_path.parent.iterdir())
     if parent_empty: obj_path.parent.rmdir()
-
-def gethash():
-    data = sys.stdin.readlines()
-    assert len(data) == 1, "Expect one line of input"
-    digest = data[0].strip()
-    object_path = dig2path(digest, exists=True)
-    print(object_path.parent.name + object_path.name)
-
-def main():
-    parser = argh.ArghParser()
-    # TODO: Better passthrough without -- 
-    parser.add_commands([
-        put,
-        get,
-        delete,
-        gethash,
-    ])
-    parser.dispatch()
-
-if __name__ == '__main__':
-    main()
     
+def gethash(partial_digest):
+    object_path = dig2path(partial_digest, exists=True)
+    return object_path.parent.name + object_path.name
