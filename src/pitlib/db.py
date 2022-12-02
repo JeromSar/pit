@@ -1,12 +1,12 @@
 
-import sys
 import hashlib
 from pathlib import Path
 
 HASH_LEN = 40 # hex chars, sha1
 
 def objpath():
-    proj_path = Path.cwd().joinpath("test")
+    # TODO: Recursively find the parent
+    proj_path = Path.cwd()
     pit_path = proj_path.joinpath(".pit")
     objects_path = pit_path.joinpath("objects")
     
