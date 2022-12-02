@@ -4,20 +4,28 @@ from pathlib import Path
 
 HASH_LEN = 40 # hex chars, sha1
 
-def objpath():
+def pitpath():
     # TODO: Recursively find the parent
-    proj_path = Path.cwd()
-    pit_path = proj_path.joinpath(".pit")
-    objects_path = pit_path.joinpath("objects")
-    
+    pit_path = Path.cwd().joinpath(".pit")    
     assert pit_path.exists(), "Expect {} to exist".format(pit_path)
     assert pit_path.is_dir(), "Expect {} to be a directory".format(pit_path)
+    return pit_path
     
+def objpath():
+    pit_path = pitpath()
+    objects_path = pit_path.joinpath("objects")
     if not objects_path.exists():
         objects_path.mkdir()
     assert objects_path.is_dir(), "Expect {} to be a directory".format(objects_path)
     return objects_path
 
+def refpath():
+    pit_path = pitpath()
+    refs_path = pit_path.joinpath("refs")
+    if not refs_path.exists():
+        refs_path.mkdir()
+    assert refs_path.is_dir(), "Expect {} to be a directory".format(refs_path)
+    return refs_path
 
 def dig2path(partial_digest, exists):
     objects_path = objpath()
@@ -66,7 +74,7 @@ def put(bytes_in):
     assert thisobj_path.parent.is_dir(), "Expect {} to be a directory".format(thisobj_path)
     thisobj_path.write_bytes(bytes_in)
     return digest
-
+    
 def get(partial_digest):
     obj_path = dig2path(partial_digest, exists=True)
     assert obj_path.is_file(), "Expect {} to be a file".format(obj_path)
@@ -93,3 +101,35 @@ def delete(partial_digest):
 def gethash(partial_digest):
     object_path = dig2path(partial_digest, exists=True)
     return object_path.parent.name + object_path.name
+
+def putref(type, name, hash):
+    assert len(hash) == HASH_LEN
+    assert type == "heads"
+    # TODO: add support for remotes and tags
+    refs = refpath()
+
+    refs_type_path = refs.joinpath(type)
+    if not refs_type_path.exists():
+        refs_type_path.mkdir()
+    assert refs_type_path.is_dir(), "Expect {} to be a directory".format(refs_type_path)
+    
+    refs_type_path.joinpath(name).write_text(hash)
+
+def getref(type, name):
+    assert type == "heads"
+    # TODO: add support for remotes and tags
+    refs = refpath()
+    refs_type_path = refs.joinpath(type)
+    assert refs_type_path.is_dir(), "Expect {} to be a directory".format(refs_type_path)
+    ref = refs_type_path.joinpath(name)
+    assert ref.is_file(), "Expect {} to be a file".format(ref)
+    
+    hash = ref.read_text().strip()
+    assert len(hash) == HASH_LEN
+    return hash
+
+def hash(bytes_in):
+    hash = hashlib.sha1()
+    hash.update(bytes_in)
+    return hash.hexdigest()
+

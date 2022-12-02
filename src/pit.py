@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pitlib.tree as tree
+
 import argh
 
 def init():
@@ -12,10 +14,15 @@ def init():
     pit_path.joinpath("objects").mkdir()
     print("Created new pit repository: {}".format(pit_path))
 
+def status():
+    tree_obj = tree.from_dir(Path.cwd())
+    print(tree_obj)
+
 def main():
     parser = argh.ArghParser()
     parser.add_commands([
-        init
+        init,
+        status
     ])
     parser.dispatch()
 
