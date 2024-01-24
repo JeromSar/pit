@@ -9,7 +9,9 @@ python = "^3.10"
 argh = "^0.26.2"
 attrs = "^22.1.0"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.4"
+fs = "^2.4.16"
 
 [tool.poetry.scripts]
 pit = "pit:main"

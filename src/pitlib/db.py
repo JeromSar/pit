@@ -1,8 +1,11 @@
 
 import hashlib
 from pathlib import Path
+from fs.osfs import OSFS
 
 HASH_LEN = 40 # hex chars, sha1
+
+FS = OSFS(".")
 
 def repo_path(expect_exist=True):
     # TODO: Recursively find the parent
