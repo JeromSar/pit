@@ -1,18 +1,19 @@
 from pathlib import Path
 
+import pitlib.db as db
 import pitlib.tree as tree
 
 import argh
 
 def init():
-    pit_path = Path.cwd().joinpath(".pit")
-    if pit_path.is_dir():
-        print("Already a pit directory: {}".format(pit_path))
+    repo_path = db.repo_path(expect_exist=False)
+    if repo_path.is_dir():
+        print("Already a pit directory: {}".format(repo_path))
         exit(0)
 
-    pit_path.mkdir()
-    pit_path.joinpath("objects").mkdir()
-    print("Created new pit repository: {}".format(pit_path))
+    repo_path.mkdir()
+    repo_path.joinpath("objects").mkdir()
+    print("Created new pit repository: {}".format(repo_path))
 
 def status():
     tree_obj = tree.from_dir(Path.cwd())

@@ -4,31 +4,55 @@ from pathlib import Path
 
 HASH_LEN = 40 # hex chars, sha1
 
-def pitpath():
+def repo_path(expect_exist=True):
     # TODO: Recursively find the parent
     pit_path = Path.cwd().joinpath(".pit")    
-    assert pit_path.exists(), "Expect {} to exist".format(pit_path)
-    assert pit_path.is_dir(), "Expect {} to be a directory".format(pit_path)
+    if expect_exist:
+        assert pit_path.exists(), "Expect {} to exist".format(pit_path)
+        assert pit_path.is_dir(), "Expect {} to be a directory".format(pit_path)
     return pit_path
     
-def objpath():
-    pit_path = pitpath()
-    objects_path = pit_path.joinpath("objects")
+def objs_path():
+    repo = repo_path()
+    objects_path = repo.joinpath("objects")
     if not objects_path.exists():
         objects_path.mkdir()
     assert objects_path.is_dir(), "Expect {} to be a directory".format(objects_path)
     return objects_path
 
-def refpath():
-    pit_path = pitpath()
-    refs_path = pit_path.joinpath("refs")
+def refs_path():
+    repo = repo_path()
+    refs_path = repo.joinpath("refs")
     if not refs_path.exists():
         refs_path.mkdir()
     assert refs_path.is_dir(), "Expect {} to be a directory".format(refs_path)
     return refs_path
 
+def resolve_ref(ref, recursive=True):
+    refs_path = repo_path().joinpath(ref)
+    assert refs_path.is_dir(), "Expect {} to be a directory".format(refs_path)
+    resolved = None
+
+    if ref.startswith("ref: "):
+        ref = ref[5:]
+    assert not ref.contains(" "), f"Ref cannot contain space: {ref}"
+    
+    if ref == "HEAD" or ref.contains("/"):
+        # Actual ref: "HEAD" or something like "heads/master"
+        ref_path = refs_path.joinpath(*ref.split("/"))
+        assert ref_path.is_file(), "Expect {} to be a file".format(ref_path)   
+        resolved = ref_path.read_text().strip()
+
+        # Recurse if needed
+        if recursive and resolved.startswith("ref: "):
+            return resolve_ref(resolved)
+        return resolved
+    else:
+        # Object
+        return dig2path(partial_digest=ref, exists=True)
+
 def dig2path(partial_digest, exists):
-    objects_path = objpath()
+    objects_path = objs_path()
     
     partial_digest = partial_digest.strip().lower()
     assert len(partial_digest) > 0, "Expect digest to be greater than 0 length"
@@ -106,7 +130,7 @@ def putref(type, name, hash):
     assert len(hash) == HASH_LEN
     assert type == "heads"
     # TODO: add support for remotes and tags
-    refs = refpath()
+    refs = refs_path()
 
     refs_type_path = refs.joinpath(type)
     if not refs_type_path.exists():
@@ -118,7 +142,7 @@ def putref(type, name, hash):
 def getref(type, name):
     assert type == "heads"
     # TODO: add support for remotes and tags
-    refs = refpath()
+    refs = refs_path()
     refs_type_path = refs.joinpath(type)
     assert refs_type_path.is_dir(), "Expect {} to be a directory".format(refs_type_path)
     ref = refs_type_path.joinpath(name)
