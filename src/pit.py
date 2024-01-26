@@ -6,7 +6,7 @@ import pitlib.tree as tree
 import argh
 
 def init():
-    repo_path = db.repo_path(expect_exist=False)
+    repo_path = db.db_path(expect_exists=False)
     if repo_path.is_dir():
         print("Already a pit directory: {}".format(repo_path))
         exit(0)

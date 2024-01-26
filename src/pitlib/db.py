@@ -7,54 +7,76 @@ HASH_LEN = 40 # hex chars, sha1
 
 FS = OSFS(".")
 
-def repo_path(expect_exist=True):
+def hash(input):
+    if input is None or not (isinstance(input, str) or isinstance(input, bytes)):
+        raise ValueError("Must provide bytes (parameter is None)")
+
+    if isinstance(input, str):
+        input = input.encode(encoding='utf-8')
+
+    hash = hashlib.sha1()
+    hash.update(input)
+    return hash.hexdigest()
+
+def db_path(expect_exists=True):
     # TODO: Recursively find the parent
-    pit_path = Path.cwd().joinpath(".pit")    
-    if expect_exist:
-        assert pit_path.exists(), "Expect {} to exist".format(pit_path)
-        assert pit_path.is_dir(), "Expect {} to be a directory".format(pit_path)
-    return pit_path
-    
+    pitfolder = ".pit"
+    if expect_exists:
+        assert FS.exists(pitfolder), "Expect {} to exist".format(pitfolder)
+        assert FS.isdir(pitfolder), "Expect {} to be a directory".format(pitfolder)
+    return pitfolder
+
+def init_db():
+    pitdir = db_path(expect_exists=False)
+    if FS.isdir(pitdir): return
+    if FS.exists(pitdir):
+        raise AssertionError(".pit is not a directory")
+    FS.makedir(pitdir)
+
+def sub_path(dir):
+    sub_path = db_path() + f"/{dir}"
+    if not FS.exists(sub_path):
+        FS.makedir(sub_path)
+    assert FS.isdir(sub_path), "Expect {} to be a directory".format(sub_path)
+    return sub_path
+
 def objs_path():
-    repo = repo_path()
-    objects_path = repo.joinpath("objects")
-    if not objects_path.exists():
-        objects_path.mkdir()
-    assert objects_path.is_dir(), "Expect {} to be a directory".format(objects_path)
-    return objects_path
+    return sub_path("objs")
 
 def refs_path():
-    repo = repo_path()
-    refs_path = repo.joinpath("refs")
-    if not refs_path.exists():
-        refs_path.mkdir()
-    assert refs_path.is_dir(), "Expect {} to be a directory".format(refs_path)
-    return refs_path
+    return sub_path("refs")
 
-def resolve_ref(ref, recursive=True):
-    refs_path = repo_path().joinpath(ref)
-    assert refs_path.is_dir(), "Expect {} to be a directory".format(refs_path)
-    resolved = None
+def digest_to_path(digest):
+    if not digest: raise ValueError()
+    if not isinstance(digest, str): raise ValueError("Expect digest to be a string")
+    if len(digest) != HASH_LEN: raise ValueError(f"Expect digest '{digest}' to be of length {HASH_LEN}")
+    digest = digest.lower() # auto-convert paths to lowercase
+    return objs_path() + f"/{digest[0]}/{digest[1:]}"
 
-    if ref.startswith("ref: "):
-        ref = ref[5:]
-    assert not ref.contains(" "), f"Ref cannot contain space: {ref}"
+def put(bytes_in):
+    digest = hash(bytes_in)
+    thisobj_path = digest_to_path(digest)
     
-    if ref == "HEAD" or ref.contains("/"):
-        # Actual ref: "HEAD" or something like "heads/master"
-        ref_path = refs_path.joinpath(*ref.split("/"))
-        assert ref_path.is_file(), "Expect {} to be a file".format(ref_path)   
-        resolved = ref_path.read_text().strip()
+    if not thisobj_path.parent.exists():
+        thisobj_path.parent.mkdir()
+    assert thisobj_path.parent.is_dir(), "Expect {} to be a directory".format(thisobj_path)
+    thisobj_path.write_bytes(bytes_in)
+    return digest
+    
+def get(partial_digest):
+    obj_path = partial_digest_to_path(partial_digest, exists=True)
+    assert obj_path.is_file(), "Expect {} to be a file".format(obj_path)
+    
+    bytes_out = b''
+    with open(obj_path, "rb") as f:
+        while True:
+            bytes_read = f.read(1024)
+            if bytes_read == b'':
+                break
+            bytes_out += bytes_read
+    return bytes_out
 
-        # Recurse if needed
-        if recursive and resolved.startswith("ref: "):
-            return resolve_ref(resolved)
-        return resolved
-    else:
-        # Object
-        return dig2path(partial_digest=ref, exists=True)
-
-def dig2path(partial_digest, exists):
+def partial_digest_to_path(partial_digest, exists):
     objects_path = objs_path()
     
     partial_digest = partial_digest.strip().lower()
@@ -90,34 +112,34 @@ def dig2path(partial_digest, exists):
         exit(1)
     return objects[0]
 
-def put(bytes_in):
-    hash = hashlib.sha1()
-    hash.update(bytes_in)
-    digest = hash.hexdigest()
-    thisobj_path = dig2path(digest, exists=False)
+def resolve_ref(ref, recursive=True):
+    refs_path = db_path().joinpath(ref)
+    assert refs_path.is_dir(), "Expect {} to be a directory".format(refs_path)
+    resolved = None
+
+    if ref.startswith("ref: "):
+        ref = ref[5:]
+    assert not ref.contains(" "), f"Ref cannot contain space: {ref}"
     
-    if not thisobj_path.parent.exists():
-        thisobj_path.parent.mkdir()
-    assert thisobj_path.parent.is_dir(), "Expect {} to be a directory".format(thisobj_path)
-    thisobj_path.write_bytes(bytes_in)
-    return digest
-    
-def get(partial_digest):
-    obj_path = dig2path(partial_digest, exists=True)
-    assert obj_path.is_file(), "Expect {} to be a file".format(obj_path)
-    
-    bytes_out = b''
-    with open(obj_path, "rb") as f:
-        while True:
-            bytes_read = f.read(1024)
-            if bytes_read == b'':
-                break
-            bytes_out += bytes_read
-    return bytes_out
+    if ref == "HEAD" or ref.contains("/"):
+        # Actual ref: "HEAD" or something like "heads/master"
+        ref_path = refs_path.joinpath(*ref.split("/"))
+        assert ref_path.is_file(), "Expect {} to be a file".format(ref_path)   
+        resolved = ref_path.read_text().strip()
+
+        # Recurse if needed
+        if recursive and resolved.startswith("ref: "):
+            return resolve_ref(resolved)
+        return resolved
+    else:
+        # Object
+        return partial_digest_to_path(partial_digest=ref, exists=True)
+
+
 
 def delete(partial_digest):
     # Delete
-    obj_path = dig2path(partial_digest, exists=True)
+    obj_path = partial_digest_to_path(partial_digest, exists=True)
     assert obj_path.is_file(), "Expect {} to be a file".format(obj_path)
     obj_path.unlink()
     
@@ -126,7 +148,7 @@ def delete(partial_digest):
     if parent_empty: obj_path.parent.rmdir()
     
 def gethash(partial_digest):
-    object_path = dig2path(partial_digest, exists=True)
+    object_path = partial_digest_to_path(partial_digest, exists=True)
     return object_path.parent.name + object_path.name
 
 def putref(type, name, hash):
@@ -154,9 +176,4 @@ def getref(type, name):
     hash = ref.read_text().strip()
     assert len(hash) == HASH_LEN
     return hash
-
-def hash(bytes_in):
-    hash = hashlib.sha1()
-    hash.update(bytes_in)
-    return hash.hexdigest()
 
