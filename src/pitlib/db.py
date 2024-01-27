@@ -70,18 +70,14 @@ def put(content):
     FS.writebytes(path, content)
     return digest
     
-def get(partial_digest):
-    obj_path = partial_digest_to_path(partial_digest, exists=True)
-    assert obj_path.is_file(), "Expect {} to be a file".format(obj_path)
+def get(digest, partial=False):
+    if partial: raise NotImplemented()
+
+    if not isinstance(digest, str): raise ValueError("Expect digest to be a string")
+    path = digest_to_path(digest)
+    assert FS.isfile(path), "Expect {} to be a file".format(path)
     
-    bytes_out = b''
-    with open(obj_path, "rb") as f:
-        while True:
-            bytes_read = f.read(1024)
-            if bytes_read == b'':
-                break
-            bytes_out += bytes_read
-    return bytes_out
+    return FS.readbytes(path)
 
 def partial_digest_to_path(partial_digest, exists):
     objects_path = objs_path()

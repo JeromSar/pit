@@ -223,11 +223,19 @@ def test_put_noinit():
     with pytest.raises(Exception):
         db.put(b"hello")
 
+
+@pytest.mark.parametrize("data", [None, False, True, 1, 0, -1])
+def test_put_invalid(data):
+    db.init_db()
+    with pytest.raises(ValueError):
+        db.put(data)
+
 @pytest.mark.parametrize("data", ["hello", "Hello", b"hello", "", b"", b"\0\x234234", b"\0\0\xe2\x80\x9d"])
 def test_put_simple(data):
     db.init_db()
     assert not FS.exists(db.digest_to_path(db.hash(data)))
     digest = db.put(data)
+    assert len(digest) == db.HASH_LEN
     assert digest == db.hash(data)
     path = db.digest_to_path(digest)
     assert FS.exists(path)
@@ -240,12 +248,45 @@ def test_put_simple(data):
     else:
         assert False
 
-@pytest.mark.parametrize("data", [None, False, True, 1, 0, -1])
-def test_put_invalid(data):
+def test_put_count():
+    datas = [b"hello", b"", b"\0\x234234", b"\0", b"\0\0\xe2\x80\x9d"]
     db.init_db()
-    with pytest.raises(ValueError):
+    for data in datas:
         db.put(data)
+    files_created = 0
+    for path, info in FS.walk.info():
+        if not info.is_dir:
+            files_created += 1
+    assert files_created == len(datas)
 
 #
 # db.get
 #
+def test_put_noinit():
+    with pytest.raises(Exception):
+        db.get("da39a3ee5e6b4b0d3255bfef95601890afd80709")
+    with pytest.raises(Exception):
+        db.get(b"da39a3ee5e6b4b0d3255bfef95601890afd80709")
+
+@pytest.mark.parametrize("data", [None, False, True, 1, 0, -1])
+def test_get_invalid(data):
+    db.init_db()
+    with pytest.raises(Exception):
+        db.get(data)
+
+@pytest.mark.parametrize("data", [b"hello", b"", b"\0\x234234", b"\0", b"\0\0\xe2\x80\x9d"])
+def test_put_get(data):
+    db.init_db()
+    digest = db.put(data)
+    if isinstance(data, str): data = data.encode('utf-8')
+    assert db.get(digest) == data
+
+def test_put_get_multi():
+    datas = [b"hello", b"", b"\0\x234234", b"\0", b"\0\0\xe2\x80\x9d"]
+    digests = []
+    db.init_db()
+    for data in datas:
+        digests.append(db.put(data))
+    for (data, digest) in zip(datas, digests):
+        assert db.get(digest) == data
+
