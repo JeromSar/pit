@@ -192,6 +192,7 @@ def test_d2p_simple():
     assert path.startswith(db.objs_path())
     assert path != db.objs_path()
     assert path != db.objs_path() + '/' + digest
+    assert '/' in path
     assert not FS.exists(path)
 
 def test_d2p_different():
@@ -216,10 +217,35 @@ def test_d2p_caps2():
 # db.put
 #
 
-def test_put_simple():
+def test_put_noinit():
+    with pytest.raises(Exception):
+        db.put("hello")
+    with pytest.raises(Exception):
+        db.put(b"hello")
+
+@pytest.mark.parametrize("data", ["hello", "Hello", b"hello", "", b"", b"\0\x234234", b"\0\0\xe2\x80\x9d"])
+def test_put_simple(data):
     db.init_db()
-    data = "hello"
     assert not FS.exists(db.digest_to_path(db.hash(data)))
-    digest = db.put("hello")
+    digest = db.put(data)
     assert digest == db.hash(data)
-    assert FS.exists(db.digest_to_path(digest))
+    path = db.digest_to_path(digest)
+    assert FS.exists(path)
+
+    # This may be testing too much of the internal API. Remove if it becomes a problem
+    if isinstance(data, str):
+        assert FS.readtext(path, encoding='utf-8') == data
+    elif isinstance(data, bytes):
+        assert FS.readbytes(path) == data
+    else:
+        assert False
+
+@pytest.mark.parametrize("data", [None, False, True, 1, 0, -1])
+def test_put_invalid(data):
+    db.init_db()
+    with pytest.raises(ValueError):
+        db.put(data)
+
+#
+# db.get
+#

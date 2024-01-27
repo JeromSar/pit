@@ -53,14 +53,21 @@ def digest_to_path(digest):
     digest = digest.lower() # auto-convert paths to lowercase
     return objs_path() + f"/{digest[0]}/{digest[1:]}"
 
-def put(bytes_in):
-    digest = hash(bytes_in)
-    thisobj_path = digest_to_path(digest)
+def put(content):
+    if not (isinstance(content, str) or isinstance(content, bytes)): raise ValueError("Content must be str or bytes")
+    db_path(expect_exists=True)
     
-    if not thisobj_path.parent.exists():
-        thisobj_path.parent.mkdir()
-    assert thisobj_path.parent.is_dir(), "Expect {} to be a directory".format(thisobj_path)
-    thisobj_path.write_bytes(bytes_in)
+    digest = hash(content)
+    path = digest_to_path(digest)
+    if isinstance(content, str): content = content.encode(encoding = 'utf-8')
+
+    # Create parent by finding the rightmost occurrence of '/'
+    parent_path = path[0:path.rfind("/")]
+    FS.makedirs(parent_path, recreate=True)
+
+    # Write the file
+    FS.create(path, wipe=True)
+    FS.writebytes(path, content)
     return digest
     
 def get(partial_digest):
