@@ -1,11 +1,12 @@
-from pathlib import Path
+import fs
 
 import pitlib.db as db
 
 from attrs import define, field
 
 @define
-class Entry():
+class TreeEntry():
+    # TODO: better typing?
     type: str = field()
     hash: str = field()
     name: str = field()
@@ -35,31 +36,40 @@ class Tree():
             s += f"{entry.type}\t{entry.hash}\t{entry.name}\n"
         return s
 
-def from_text(text):
-    entries = []
-    for line in text.splitlines():
-        line = line.strip()
-        parts = line.split("\t")
-        entries.append(Entry(parts[0], parts[1], parts[2]))
-    return Tree(entries)
+    @staticmethod
+    def from_text(text):
+        entries = []
+        for line in text.splitlines():
+            line = line.strip()
+            parts = line.split("\t")
+            entries.append(TreeEntry(parts[0], parts[1], parts[2]))
+        return Tree(entries)
 
 
-def from_dir(dir: Path):
-    assert dir.is_dir()
-    entries = []
-    
-    contents = list(sorted(dir.iterdir()))
-    for item in contents:
-        if item.name.startswith("."):
-            continue # TODO: proper .pitignore file
+    @staticmethod
+    def from_fs(dir: fs.base.FS):
+        entries = []
         
-        if item.is_dir():
-            entries.append(from_dir(item))
-            continue
+        dir.makedir("dir1")
+        dir.makedirs("dir2/dir3/dir4")
+        dir.makedirs("dir2/dir5/dir6/dir7")
 
-        entries.append(Entry(
-            type="blob",
-            hash=db.hash(item.read_bytes()),
-            name=item.name
-        ))    
-    return Tree(entries)
+
+        iterator_tuple_to_paths = lambda path_dirs_files: path_dirs_files[0]
+        paths = list(sorted(map(iterator_tuple_to_paths, dir.walk())))
+        assert False, paths
+
+        for item in paths:
+            if item.name.startswith("."):
+                continue # TODO: proper .pitignore file
+            
+            if item.is_dir():
+                entries.append(Tree.from_fs(item)) # TODO: avoid recursion
+                continue
+
+            entries.append(TreeEntry(
+                type="blob",
+                hash=db.hash(item.read_bytes()),
+                name=item.name
+            ))    
+        return Tree(entries)
